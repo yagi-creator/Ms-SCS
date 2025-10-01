@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>売上見込計算アプリ - 教材代理店向け</title>
+    
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .level-badge {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .calculation-result {
+            background: var(--success-gradient);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            text-align: center;
+        }
+        
+        .section-toggle {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .section-toggle:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .collapse-icon {
+            transition: transform 0.2s ease;
+        }
+        
+        .collapsed .collapse-icon {
+            transform: rotate(-90deg);
+        }
+        
+        @media (max-width: 768px) {
+            .container-fluid {
+                padding: 0.5rem;
+            }
+            
+            .card-body {
+                padding: 1rem;
+            }
+            
+            .btn {
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <!-- ヘッダー -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <h1 class="h3 mb-0">売上見込計算アプリ</h1>
+                                <small class="text-muted">教材代理店向け</small>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <span id="levelBadge" class="level-badge">レベル1（自動判定）</span>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <button class="btn btn-outline-primary" onclick="createNewProject()">
+                                    <i class="bi bi-plus"></i> 新規案件
+                                </button>
+                                <button class="btn btn-success" onclick="saveProject()">
+                                    <i class="bi bi-save"></i> 保存
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- サイドバー：案件管理 -->
+            <div class="col-lg-3 col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">保存済み案件</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="projectList" class="list-group list-group-flush">
+                            <div class="p-3 text-muted text-center">案件がありません</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- メインコンテンツ -->
+            <div class="col-lg-9 col-md-8">
+                <!-- 基本情報 -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">学校名・案件名</label>
+                                <input type="text" id="schoolName" class="form-control" 
+                                       placeholder="例：○○中学校 1年生教材" 
+                                       onchange="updateCurrentProject()">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">合計人数（レベル1・2用）</label>
+                                <input type="number" id="totalStudents" class="form-control" 
+                                       placeholder="例：200" min="0" 
+                                       onchange="updateCurrentProject(); calculate()">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12">
+                                <label class="form-label">情報把握状況（チェックでレベル自動判定）</label>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="knowsStudentsByGrade" 
+                                               onchange="updateKnowledgeState()">
+                                        <label class="form-check-label">各学年の人数がわかる</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="knowsBooksByGrade" 
+                                               onchange="updateKnowledgeState()">
+                                        <label class="form-check-label">各学年の冊数がわかる</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="knowsSeasonalDetails" 
+                                               onchange="updateKnowledgeState()">
+                                        <label class="form-check-label">季節教材の詳細がわかる</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="knowsOtherDetails" 
+                                               onchange="updateKnowledgeState()">
+                                        <label class="form-check-label">その他教材の詳細がわかる</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 人数セクション -->
+                <div class="card mb-4">
+                    <div class="card-header section-toggle" data-bs-toggle="collapse" data-bs-target="#studentsSection">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">人数</h5>
+                            <i class="bi bi-chevron-down collapse-icon"></i>
+                        </div>
+                    </div>
+                    <div id="studentsSection" class="collapse show">
+                        <div class="card-body">
+                            <div id="studentsForm">
+                                <!-- 動的に生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 冊数セクション -->
+                <div class="card mb-4">
+                    <div class="card-header section-toggle" data-bs-toggle="collapse" data-bs-target="#booksSection">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">一人当たりの冊数</h5>
+                            <i class="bi bi-chevron-down collapse-icon"></i>
+                        </div>
+                    </div>
+                    <div id="booksSection" class="collapse show">
+                        <div class="card-body">
+                            <div id="booksForm">
+                                <!-- 動的に生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 季節教材セクション -->
+                <div class="card mb-4" id="seasonalSection" style="display: none;">
+                    <div class="card-header section-toggle" data-bs-toggle="collapse" data-bs-target="#seasonalMaterials">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">季節教材（中1・中2・中3）</h5>
+                            <i class="bi bi-chevron-down collapse-icon"></i>
+                        </div>
+                    </div>
+                    <div id="seasonalMaterials" class="collapse">
+                        <div class="card-body">
+                            <div id="seasonalForm">
+                                <!-- 動的に生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- その他教材セクション -->
+                <div class="card mb-4" id="otherSection" style="display: none;">
+                    <div class="card-header section-toggle" data-bs-toggle="collapse" data-bs-target="#otherMaterials">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">その他教材（人数無関係）</h5>
+                            <i class="bi bi-chevron-down collapse-icon"></i>
+                        </div>
+                    </div>
+                    <div id="otherMaterials" class="collapse">
+                        <div class="card-body">
+                            <div id="otherForm">
+                                <!-- 動的に生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 計算結果 -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">売上見込結果</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="calculationResult" class="calculation-result">
+                            <h2 class="mb-0">¥ <span id="totalAmount">0</span></h2>
+                            <p class="mb-0">合計売上見込額</p>
+                        </div>
+                        <div class="row mt-4">
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body py-2">
+                                        <h6>通常教材</h6>
+                                        <h5 id="regularAmount">¥0</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body py-2">
+                                        <h6>季節教材</h6>
+                                        <h5 id="seasonalAmount">¥0</h5>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-center">
+                                <div class="card bg-warning text-white">
+                                    <div class="card-body py-2">
+                                        <h6>その他教材</h6>
+                                        <h5 id="otherAmount">¥0</h5>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <small id="calculationExplanation" class="text-muted"></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // グローバル状態管理
+        let currentProject = null;
+        let projects = [];
+
+        // デフォルト設定
+        const DEFAULT_BOOKS = {
+            elem: 2, j1: 3, j2: 3, j3: 5, high: 2
+        };
+
+        const GRADE_LABELS = {
+            elem: '小学生', j1: '中1', j2: '中2', j3: '中3', high: '高校生'
+        };
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjects();
+            createNewProject();
+            updateUI();
+        });
+
+        // プロジェクト管理機能
+        function createNewProject() {
+            currentProject = {
+                id: Date.now().toString(),
+                schoolName: '',
+                totalStudents: 0,
+                knowsStudentsByGrade: false,
+                knowsBooksByGrade: false,
+                knowsSeasonalDetails: false,
+                knowsOtherDetails: false,
+                grades: {
+                    elem: { students: 0, books: DEFAULT_BOOKS.elem },
+                    j1: { students: 0, books: DEFAULT_BOOKS.j1 },
+                    j2: { students: 0, books: DEFAULT_BOOKS.j2 },
+                    j3: { students: 0, books: DEFAULT_BOOKS.j3 },
+                    high: { students: 0, books: DEFAULT_BOOKS.high }
+                },
+                seasonalMaterials: {
+                    j1: { type: 'combined', subjectCount: 1 },
+                    j2: { type: 'combined', subjectCount: 1 },
+                    j3: { type: 'combined', subjectCount: 1 }
+                },
+                otherMaterials: [],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            updateUI();
+        }
+
+        function saveProject() {
+            if (!currentProject) return;
+
+            currentProject.updatedAt = new Date().toISOString();
+            
+            const existingIndex = projects.findIndex(p => p.id === currentProject.id);
+            if (existingIndex >= 0) {
+                projects[existingIndex] = { ...currentProject };
+            } else {
+                projects.push({ ...currentProject });
+            }
+
+            localStorage.setItem('sales_calculator_projects', JSON.stringify(projects));
+            updateProjectList();
+            showToast('案件を保存しました', 'success');
+        }
+
+        function loadProjects() {
+            try {
+                const saved = localStorage.getItem('sales_calculator_projects');
+                projects = saved ? JSON.parse(saved) : [];
+                updateProjectList();
+            } catch (error) {
+                console.error('プロジェクトの読み込みに失敗:', error);
+                projects = [];
+            }
+        }
+
+        function updateProjectList() {
+            const container = document.getElementById('projectList');
+            
+            if (projects.length === 0) {
+                container.innerHTML = '<div class="p-3 text-muted text-center">案件がありません</div>';
+                return;
+            }
+
+            container.innerHTML = projects
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+                .map(project => `
+                    <div class="list-group-item list-group-item-action ${project.id === currentProject?.id ? 'active' : ''}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1" onclick="loadProject('${project.id}')" style="cursor: pointer;">
+                                <div class="fw-bold">${project.schoolName || '無題の案件'}</div>
+                                <small class="text-muted">
+                                    レベル${getCurrentLevel(project)} | ${new Date(project.updatedAt).toLocaleDateString()}
+                                </small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteProject('${project.id}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        function loadProject(id) {
+            const project = projects.find(p => p.id === id);
+            if (project) {
+                currentProject = { ...project };
+                updateUI();
+            }
+        }
+
+        function deleteProject(id) {
+            if (confirm('この案件を削除しますか？')) {
+                projects = projects.filter(p => p.id !== id);
+                localStorage.setItem('sales_calculator_projects', JSON.stringify(projects));
+                updateProjectList();
+                
+                if (currentProject?.id === id) {
+                    createNewProject();
+                }
+                showToast('案件を削除しました', 'warning');
+            }
+        }
+
+        // UI更新機能
+        function updateCurrentProject() {
+            if (!currentProject) return;
+            
+            currentProject.schoolName = document.getElementById('schoolName').value;
+            currentProject.totalStudents = Number(document.getElementById('totalStudents').value) || 0;
+            currentProject.updatedAt = new Date().toISOString();
+        }
+
+        function updateKnowledgeState() {
+            if (!currentProject) return;
+
+            currentProject.knowsStudentsByGrade = document.getElementById('knowsStudentsByGrade').checked;
+            currentProject.knowsBooksByGrade = document.getElementById('knowsBooksByGrade').checked;
+            currentProject.knowsSeasonalDetails = document.getElementById('knowsSeasonalDetails').checked;
+            currentProject.knowsOtherDetails = document.getElementById('knowsOtherDetails').checked;
+
+            updateUI();
+            calculate();
+        }
+
+        function updateUI() {
+            if (!currentProject) return;
+
+            // 基本情報の反映
+            document.getElementById('schoolName').value = currentProject.schoolName;
+            document.getElementById('totalStudents').value = currentProject.totalStudents;
+
+            // チェックボックスの状態反映
+            document.getElementById('knowsStudentsByGrade').checked = currentProject.knowsStudentsByGrade;
+            document.getElementById('knowsBooksByGrade').checked = currentProject.knowsBooksByGrade;
+            document.getElementById('knowsSeasonalDetails').checked = currentProject.knowsSeasonalDetails;
+            document.getElementById('knowsOtherDetails').checked = currentProject.knowsOtherDetails;
+
+            // レベル表示更新
+            const level = getCurrentLevel(currentProject);
+            document.getElementById('levelBadge').textContent = `レベル${level}（自動判定）`;
+
+            // セクション表示/非表示
+            document.getElementById('seasonalSection').style.display = 
+                currentProject.knowsSeasonalDetails ? 'block' : 'none';
+            document.getElementById('otherSection').style.display = 
+                currentProject.knowsOtherDetails ? 'block' : 'none';
+
+            // フォーム再構築
+            buildStudentsForm();
+            buildBooksForm();
+            if (currentProject.knowsSeasonalDetails) buildSeasonalForm();
+            if (currentProject.knowsOtherDetails) buildOtherForm();
+
+            // プロジェクトリスト更新
+            updateProjectList();
+
+            // 計算実行
+            calculate();
+        }
+
+        function buildStudentsForm() {
+            const container = document.getElementById('studentsForm');
+            const level = getCurrentLevel(currentProject);
+
+            if (!currentProject.knowsStudentsByGrade) {
+                // レベル1・2：合計人数のみ
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>レベル${level}：合計人数を使用</h6>
+                        <p class="mb-0">
+                            ${level === 2 ? 
+                                '合計人数を 小学生:中1:中2:中3:高校生 = 1:1:2:3:1 の比率で自動配分します。' :
+                                '合計人数 × 3冊 × 1,500円で計算します。'
+                            }
+                        </p>
+                    </div>
+                `;
+            } else {
+                // レベル3・4：学年別人数
+                container.innerHTML = `
+                    <div class="row g-3">
+                        ${Object.keys(DEFAULT_BOOKS).map(grade => `
+                            <div class="col-md-2 col-6">
+                                <label class="form-label">${GRADE_LABELS[grade]}</label>
+                                <input type="number" id="students_${grade}" class="form-control" 
+                                       value="${currentProject.grades[grade].students}" 
+                                       onchange="updateGradeStudents('${grade}', this.value)"
+                                       placeholder="0" min="0">
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        function buildBooksForm() {
+            const container = document.getElementById('booksForm');
+            const level = getCurrentLevel(currentProject);
+
+            if (!currentProject.knowsBooksByGrade) {
+                // レベル1・3：デフォルト冊数
+                container.innerHTML = `
+                    <div class="alert alert-secondary">
+                        <h6>レベル${level}：${level === 1 ? '固定' : 'デフォルト'}冊数を使用</h6>
+                        <div class="row text-center">
+                            ${Object.entries(DEFAULT_BOOKS).map(([grade, books]) => `
+                                <div class="col">
+                                    <div>${GRADE_LABELS[grade]}</div>
+                                    <span class="badge bg-secondary">${level === 1 ? 3 : books}冊</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // レベル2・4：ユーザー入力冊数
+                container.innerHTML = `
+                    <div class="row g-3">
+                        ${Object.keys(DEFAULT_BOOKS).map(grade => `
+                            <div class="col-md-2 col-6">
+                                <label class="form-label">${GRADE_LABELS[grade]}</label>
+                                <input type="number" id="books_${grade}" class="form-control" 
+                                       value="${currentProject.grades[grade].books}" 
+                                       onchange="updateGradeBooks('${grade}', this.value)"
+                                       placeholder="冊数" min="0">
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        function buildSeasonalForm() {
+            const container = document.getElementById('seasonalForm');
+            const grades = ['j1', 'j2', 'j3'];
+
+            container.innerHTML = grades.map(grade => `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h6>${GRADE_LABELS[grade]}</h6>
+                                <small class="text-muted">対象人数: <span id="seasonal_students_${grade}">0</span>人</small>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="seasonal_${grade}" 
+                                           value="combined" ${currentProject.seasonalMaterials[grade].type === 'combined' ? 'checked' : ''}
+                                           onchange="updateSeasonalMaterial('${grade}', 'type', 'combined')">
+                                    <label class="form-check-label">合本（1,500円）</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="seasonal_${grade}" 
+                                           value="separate" ${currentProject.seasonalMaterials[grade].type === 'separate' ? 'checked' : ''}
+                                           onchange="updateSeasonalMaterial('${grade}', 'type', 'separate')">
+                                    <label class="form-check-label">バラ（700円×科目数）</label>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">科目数</label>
+                                <input type="number" id="seasonal_subjects_${grade}" class="form-control" 
+                                       value="${currentProject.seasonalMaterials[grade].subjectCount}"
+                                       onchange="updateSeasonalMaterial('${grade}', 'subjectCount', this.value)"
+                                       min="1" max="10" ${currentProject.seasonalMaterials[grade].type === 'combined' ? 'disabled' : ''}>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <div class="fs-5 fw-bold text-primary">
+                                    <span id="seasonal_amount_${grade}">¥0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function buildOtherForm() {
+            const container = document.getElementById('otherForm');
+            
+            container.innerHTML = `
+                <div class="mb-3">
+                    <div class="row fw-bold text-muted">
+                        <div class="col-5">教材名</div>
+                        <div class="col-3">単価（円）</div>
+                        <div class="col-2">冊数</div>
+                        <div class="col-2">小計</div>
+                    </div>
+                </div>
+                <div id="otherMaterialsList"></div>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="addOtherMaterial()">
+                    <i class="bi bi-plus"></i> 教材を追加
+                </button>
+                <div class="mt-3 p-3 bg-light rounded text-end">
+                    <strong>その他教材合計: <span id="otherMaterialsTotal">¥0</span></strong>
+                </div>
+            `;
+            
+            renderOtherMaterials();
+        }
+
+        // データ更新機能
+        function updateGradeStudents(grade, value) {
+            currentProject.grades[grade].students = Number(value) || 0;
+            calculate();
+        }
+
+        function updateGradeBooks(grade, value) {
+            currentProject.grades[grade].books = Number(value) || 0;
+            calculate();
+        }
+
+        function updateSeasonalMaterial(grade, field, value) {
+            if (field === 'subjectCount') {
+                currentProject.seasonalMaterials[grade][field] = Number(value) || 1;
+            } else {
+                currentProject.seasonalMaterials[grade][field] = value;
+            }
+            
+            // 合本選択時は科目数入力を無効化
+            const subjectInput = document.getElementById(`seasonal_subjects_${grade}`);
+            if (subjectInput) {
+                subjectInput.disabled = value === 'combined';
+            }
+            
+            calculate();
+        }
+
+        function addOtherMaterial() {
+            if (currentProject.otherMaterials.length >= 10) {
+                showToast('その他教材は最大10件まで追加できます', 'warning');
+                return;
+            }
+
+            currentProject.otherMaterials.push({
+                id: Date.now().toString(),
+                name: '',
+                unitPrice: 0,
+                quantity: 0
+            });
+            
+            renderOtherMaterials();
+        }
+
+        function renderOtherMaterials() {
+            const container = document.getElementById('otherMaterialsList');
+            const materials = currentProject.otherMaterials || [];
+
+            container.innerHTML = materials.map((material, index) => `
+                <div class="row g-2 mb-2 align-items-center">
+                    <div class="col-5">
+                        <input type="text" class="form-control form-control-sm" 
+                               value="${material.name}" 
+                               onchange="updateOtherMaterial(${index}, 'name', this.value)"
+                               placeholder="例：問題集">
+                    </div>
+                    <div class="col-3">
+                        <input type="number" class="form-control form-control-sm" 
+                               value="${material.unitPrice}" 
+                               onchange="updateOtherMaterial(${index}, 'unitPrice', this.value)"
+                               placeholder="0" min="0">
+                    </div>
+                    <div class="col-2">
+                        <input type="number" class="form-control form-control-sm" 
+                               value="${material.quantity}" 
+                               onchange="updateOtherMaterial(${index}, 'quantity', this.value)"
+                               placeholder="0" min="0">
+                    </div>
+                    <div class="col-1 text-end small">
+                        ¥${(material.unitPrice * material.quantity).toLocaleString()}
+                    </div>
+                    <div class="col-1 text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                onclick="removeOtherMaterial(${index})">×</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateOtherMaterial(index, field, value) {
+            if (currentProject.otherMaterials[index]) {
+                currentProject.otherMaterials[index][field] = 
+                    field === 'name' ? value : Number(value) || 0;
+                renderOtherMaterials();
+                calculate();
+            }
+        }
+
+        function removeOtherMaterial(index) {
+            currentProject.otherMaterials.splice(index, 1);
+            renderOtherMaterials();
+            calculate();
+        }
+
+        // 計算エンジン
+        function getCurrentLevel(project = currentProject) {
+            if (!project) return 1;
+            
+            const { knowsStudentsByGrade, knowsBooksByGrade } = project;
+            if (!knowsStudentsByGrade && !knowsBooksByGrade) return 1;
+            if (!knowsStudentsByGrade && knowsBooksByGrade) return 2;
+            if (knowsStudentsByGrade && !knowsBooksByGrade) return 3;
+            return 4;
+        }
+
+        function distributeByRatio(totalStudents) {
+            const ratios = { elem: 1, j1: 1, j2: 2, j3: 3, high: 1 };
+            const totalRatio = 8;
+            
+            const distributed = {};
+            let remainder = totalStudents;
+            
+            Object.entries(ratios).forEach(([grade, ratio]) => {
+                const allocated = Math.floor(totalStudents * ratio / totalRatio);
+                distributed[grade] = allocated;
+                remainder -= allocated;
+            });
+            
+            // 端数は中3に加算
+            distributed.j3 += remainder;
+            
+            return distributed;
+        }
+
+        function calculate() {
+            if (!currentProject) return;
+
+            const level = getCurrentLevel(currentProject);
+            let gradeDistribution = {};
+
+            // レベル別の人数・冊数分布を決定
+            switch (level) {
+                case 1:
+                    const dist1 = distributeByRatio(currentProject.totalStudents);
+                    Object.keys(dist1).forEach(grade => {
+                        gradeDistribution[grade] = {
+                            students: dist1[grade],
+                            books: 3 // レベル1は固定3冊
+                        };
+                    });
+                    break;
+                    
+                case 2:
+                    const dist2 = distributeByRatio(currentProject.totalStudents);
+                    Object.keys(dist2).forEach(grade => {
+                        gradeDistribution[grade] = {
+                            students: dist2[grade],
+                            books: currentProject.grades[grade].books
+                        };
+                    });
+                    break;
+                    
+                case 3:
+                    Object.keys(DEFAULT_BOOKS).forEach(grade => {
+                        gradeDistribution[grade] = {
+                            students: currentProject.grades[grade].students,
+                            books: DEFAULT_BOOKS[grade]
+                        };
+                    });
+                    break;
+                    
+                case 4:
+                    Object.keys(DEFAULT_BOOKS).forEach(grade => {
+                        gradeDistribution[grade] = {
+                            students: currentProject.grades[grade].students,
+                            books: currentProject.grades[grade].books
+                        };
+                    });
+                    break;
+            }
+
+            // 通常教材計算
+            let regularAmount = 0;
+            Object.values(gradeDistribution).forEach(grade => {
+                regularAmount += grade.students * grade.books * 1500;
+            });
+
+            // 季節教材計算（中1・中2・中3のみ、人数連動）
+            let seasonalAmount = 0;
+            if (currentProject.knowsSeasonalDetails) {
+                ['j1', 'j2', 'j3'].forEach(grade => {
+                    const students = gradeDistribution[grade]?.students || 0;
+                    const material = currentProject.seasonalMaterials[grade];
+                    
+                    if (material.type === 'combined') {
+                        seasonalAmount += students * 1500;
+                    } else {
+                        seasonalAmount += students * material.subjectCount * 700;
+                    }
+                    
+                    // 季節教材の対象人数表示更新
+                    const studentElement = document.getElementById(`seasonal_students_${grade}`);
+                    if (studentElement) {
+                        studentElement.textContent = students;
+                    }
+                    
+                    // 季節教材の金額表示更新
+                    const amountElement = document.getElementById(`seasonal_amount_${grade}`);
+                    if (amountElement) {
+                        const amount = material.type === 'combined' ? 
+                            students * 1500 : 
+                            students * material.subjectCount * 700;
+                        amountElement.textContent = `¥${amount.toLocaleString()}`;
+                    }
+                });
+            }
+
+            // その他教材計算（人数無関係）
+            let otherAmount = 0;
+            if (currentProject.knowsOtherDetails) {
+                currentProject.otherMaterials.forEach(material => {
+                    otherAmount += material.unitPrice * material.quantity;
+                });
+            }
+
+            const totalAmount = regularAmount + seasonalAmount + otherAmount;
+
+            // 結果表示更新
+            document.getElementById('totalAmount').textContent = totalAmount.toLocaleString();
+            document.getElementById('regularAmount').textContent = `¥${regularAmount.toLocaleString()}`;
+            document.getElementById('seasonalAmount').textContent = `¥${seasonalAmount.toLocaleString()}`;
+            document.getElementById('otherAmount').textContent = `¥${otherAmount.toLocaleString()}`;
+
+            // その他教材合計表示更新
+            const otherTotalElement = document.getElementById('otherMaterialsTotal');
+            if (otherTotalElement) {
+                otherTotalElement.textContent = `¥${otherAmount.toLocaleString()}`;
+            }
+
+            // 計算説明更新
+            const explanations = {
+                1: '合計人数 × 3冊 × 1,500円で計算。季節教材は学年比率（1:1:2:3:1）で人数配分。',
+                2: '合計人数を学年比率で配分し、各学年の入力冊数で計算。',
+                3: '学年別人数 × デフォルト冊数（小2/中1,2=3/中3=5/高2）で計算。',
+                4: '学年別人数 × 学年別入力冊数で計算。最も詳細な見積もり。'
+            };
+            
+            document.getElementById('calculationExplanation').textContent = explanations[level];
+        }
+
+        // ユーティリティ機能
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+            toast.style.zIndex = '9999';
+            toast.textContent = message;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // アコーディオンのアイコン回転
+        document.addEventListener('shown.bs.collapse', function(e) {
+            const button = document.querySelector(`[data-bs-target="#${e.target.id}"]`);
+            if (button) {
+                button.classList.remove('collapsed');
+            }
+        });
+
+        document.addEventListener('hidden.bs.collapse', function(e) {
+            const button = document.querySelector(`[data-bs-target="#${e.target.id}"]`);
+            if (button) {
+                button.classList.add('collapsed');
+            }
+        });
+    </script>
+</body>
+</html>
